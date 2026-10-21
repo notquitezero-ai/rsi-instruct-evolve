@@ -1,0 +1,17 @@
+# Local-only: environment, caches, weights, raw data, full run artifacts (adapters, eval dumps)
+/.venv/
+/cache/
+/tmp/
+/models/
+/data/
+/runs/
+__pycache__/
+*.pyc
+.pytest_cache/
+
+# Deliverables: keep the final deck + screenshot; render previews and older numbered copies stay local
+/deliverables/slides/
+/deliverables/RSI_演示_v*.pptx
+
+# Local hand-off notes
+/HANDOFF_*.md
