@@ -1,0 +1,516 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>RSI 指令微调自进化系统</title>
+<meta name="description" content="基于大模型后训练的指令微调自进化系统 RSI：模型自己出题、作答、程序化验证、自动选配方、统计门控晋升。">
+<style>
+:root{
+  color-scheme: light;
+  --bg:#fafaf9; --surface:#ffffff; --surface2:#f2f4f6; --ink:#141820; --ink2:#4a5361; --muted:#8a94a3;
+  --line:#e3e6ea; --brand:#0e7c7b; --brand-soft:#e3f2f1; --accent:#c98500; --bad:#c2410c; --good:#0e7c7b;
+  --s1:#2a78d6; --s2:#eb6834; --s3:#1baf7a; --gray:#b9c1cc;
+  --m0:#b9c1cc; --m1:#9fd2ce; --m2:#4fb0ab; --m3:#2e8f8b; --m4:#0e6b6a;
+  --shadow:0 1px 2px rgba(16,24,40,.06),0 1px 3px rgba(16,24,40,.08);
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    color-scheme: dark;
+    --bg:#111316; --surface:#191c21; --surface2:#20242a; --ink:#eef0f3; --ink2:#b9c0ca; --muted:#7d8794;
+    --line:#2b3038; --brand:#33b5ae; --brand-soft:#173230; --accent:#e0a225; --bad:#f07a4a; --good:#33b5ae;
+    --s1:#3987e5; --s2:#d95926; --s3:#199e70; --gray:#59616c;
+    --m0:#59616c; --m1:#2d6a67; --m2:#2f8d88; --m3:#3fb0a9; --m4:#7fd6cf;
+    --shadow:none;
+  }
+}
+:root[data-theme="dark"]{
+  color-scheme: dark;
+  --bg:#111316; --surface:#191c21; --surface2:#20242a; --ink:#eef0f3; --ink2:#b9c0ca; --muted:#7d8794;
+  --line:#2b3038; --brand:#33b5ae; --brand-soft:#173230; --accent:#e0a225; --bad:#f07a4a; --good:#33b5ae;
+  --s1:#3987e5; --s2:#d95926; --s3:#199e70; --gray:#59616c;
+  --m0:#59616c; --m1:#2d6a67; --m2:#2f8d88; --m3:#3fb0a9; --m4:#7fd6cf;
+  --shadow:none;
+}
+*{box-sizing:border-box}
+html{scroll-behavior:smooth; scroll-padding-top:64px}
+body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.65 "PingFang SC","Microsoft YaHei","Noto Sans SC",system-ui,sans-serif;-webkit-font-smoothing:antialiased}
+a{color:var(--brand)}
+.wrap{max-width:1120px;margin:0 auto;padding:0 20px}
+nav.top{position:sticky;top:0;z-index:20;background:color-mix(in srgb,var(--bg) 88%,transparent);backdrop-filter:blur(8px);border-bottom:1px solid var(--line)}
+nav.top .wrap{display:flex;align-items:center;gap:18px;height:54px;overflow-x:auto;white-space:nowrap;scrollbar-width:none}
+nav.top .brand{font-weight:700;color:var(--ink);text-decoration:none;letter-spacing:.02em}
+nav.top a.l{color:var(--ink2);text-decoration:none;font-size:14px}
+nav.top a.l:hover{color:var(--brand)}
+nav.top .sp{flex:1}
+button.theme{background:none;border:1px solid var(--line);color:var(--ink2);border-radius:8px;padding:4px 10px;cursor:pointer;font:inherit;font-size:13px}
+header.hero{padding:56px 0 28px}
+.kicker{color:var(--brand);font-weight:600;font-size:13px;letter-spacing:.06em}
+h1{font-size:clamp(28px,4.6vw,44px);line-height:1.2;margin:10px 0 14px;letter-spacing:-.01em}
+.lead{color:var(--ink2);font-size:17px;max-width:760px;margin:0}
+.chips{display:flex;flex-wrap:wrap;gap:8px;margin-top:18px}
+.chip{border:1px solid var(--line);background:var(--surface);border-radius:999px;padding:3px 12px;font-size:13px;color:var(--ink2)}
+.btns{display:flex;gap:10px;flex-wrap:wrap;margin-top:22px}
+.btn{display:inline-block;padding:9px 16px;border-radius:10px;text-decoration:none;font-weight:600;font-size:14px;border:1px solid var(--line);color:var(--ink);background:var(--surface)}
+.btn.primary{background:var(--brand);border-color:var(--brand);color:#fff}
+section{padding:40px 0;border-top:1px solid var(--line)}
+h2{font-size:24px;margin:0 0 6px}
+.sub{color:var(--ink2);margin:0 0 22px;max-width:820px}
+.grid4{display:grid;grid-template-columns:repeat(4,1fr);gap:14px}
+.card{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:16px 18px;box-shadow:var(--shadow)}
+.kpi .lab{font-size:13px;color:var(--ink2);font-weight:600}
+.kpi .big{font-size:36px;font-weight:700;letter-spacing:-.02em;margin:4px 0 2px;font-variant-numeric:tabular-nums}
+.kpi .base{font-size:13px;color:var(--muted)}
+.delta{font-weight:700}
+.delta.good{color:var(--good)} .delta.bad{color:var(--bad)}
+.note{font-size:13px;color:var(--ink2);margin-top:12px}
+.facts{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-top:14px}
+.fact b{display:block;font-size:22px}
+.fact span{font-size:13px;color:var(--ink2)}
+.loop{display:grid;grid-template-columns:repeat(3,1fr);gap:14px;counter-reset:s}
+.step{position:relative}
+.step h3{margin:0 0 6px;font-size:16px;color:var(--brand)}
+.step p{margin:0;color:var(--ink2);font-size:14px}
+.step.key{background:var(--brand-soft);border-color:transparent}
+.legend{display:flex;gap:16px;flex-wrap:wrap;font-size:13px;color:var(--ink2);margin:4px 0 8px}
+.legend i{display:inline-block;width:12px;height:12px;border-radius:3px;margin-right:6px;vertical-align:-1px}
+.chart{position:relative}
+.chart svg{display:block;width:100%;height:auto;overflow:visible}
+.chart text{fill:var(--muted);font-size:11px;font-family:inherit}
+.chart .grid{stroke:var(--line);stroke-width:1}
+.tip{position:absolute;pointer-events:none;background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:8px 10px;font-size:12.5px;box-shadow:0 4px 14px rgba(0,0,0,.12);opacity:0;transition:opacity .12s;min-width:140px;z-index:5}
+.tip .t{font-weight:700;margin-bottom:4px;color:var(--ink)}
+.tip .r{display:flex;justify-content:space-between;gap:12px;color:var(--ink2)}
+.tip .r b{color:var(--ink);font-variant-numeric:tabular-nums}
+.two{display:grid;grid-template-columns:1.4fr 1fr;gap:18px;align-items:start}
+table{width:100%;border-collapse:collapse;font-size:13.5px}
+th,td{text-align:left;padding:7px 8px;border-bottom:1px solid var(--line);vertical-align:top}
+th{color:var(--ink2);font-weight:600;font-size:12.5px}
+td.num,th.num{text-align:right;font-variant-numeric:tabular-nums}
+.tag{display:inline-block;border-radius:6px;padding:1px 8px;font-size:12px;font-weight:600}
+.tag.up{background:var(--brand);color:#fff}
+.tag.keep{background:var(--surface2);color:var(--ink2)}
+.tag.base{background:var(--surface2);color:var(--muted)}
+details.gen{border-bottom:1px solid var(--line);padding:6px 0}
+details.gen summary{cursor:pointer;list-style:none;display:grid;grid-template-columns:70px 92px 1fr 90px;gap:10px;align-items:center;font-size:14px}
+details.gen summary::-webkit-details-marker{display:none}
+details.gen .body{padding:8px 0 6px 0;color:var(--ink2);font-size:13.5px}
+details.gen ul{margin:6px 0;padding-left:18px}
+.ops{color:var(--ink)}
+.small{font-size:12.5px;color:var(--muted)}
+.viewer .bar{display:flex;flex-wrap:wrap;gap:10px;align-items:end;margin-bottom:12px}
+.viewer label{font-size:12.5px;color:var(--ink2);display:flex;flex-direction:column;gap:4px}
+select,button.nav{font:inherit;font-size:14px;padding:6px 10px;border-radius:8px;border:1px solid var(--line);background:var(--surface);color:var(--ink)}
+button.nav{cursor:pointer}
+.prompt{background:var(--surface2);border-radius:12px;padding:12px 14px;white-space:pre-wrap;font-size:13.5px;margin-bottom:12px;max-height:220px;overflow:auto}
+.resp{white-space:pre-wrap;font-size:13.5px;background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:12px 14px;max-height:420px;overflow:auto;margin-top:8px}
+.badges{display:flex;flex-wrap:wrap;gap:6px}
+.b{font-size:12px;border-radius:6px;padding:1px 7px;font-weight:600}
+.b.ok{background:var(--brand-soft);color:var(--good)} .b.no{background:color-mix(in srgb,var(--bad) 14%,transparent);color:var(--bad)}
+.b.warn{background:color-mix(in srgb,var(--accent) 16%,transparent);color:var(--accent)}
+.tabs{display:flex;gap:6px;margin-bottom:14px}
+.tabs button{font:inherit;font-size:14px;padding:6px 14px;border-radius:999px;border:1px solid var(--line);background:var(--surface);color:var(--ink2);cursor:pointer}
+.tabs button.on{background:var(--brand);color:#fff;border-color:var(--brand)}
+.vgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(250px,1fr));gap:14px}
+.ver .v{display:inline-grid;place-items:center;width:38px;height:38px;border-radius:50%;background:var(--brand);color:#fff;font-weight:700;margin-bottom:6px}
+.ver.last .v{background:var(--accent)}
+.ver h3{margin:0 0 6px;font-size:16px}
+.ver .ev{color:var(--ink2);font-size:13.5px;margin:0 0 8px}
+.ver .fx{font-size:13.5px;margin:0;padding:8px 10px;border-radius:10px;background:var(--brand-soft)}
+pre.code{background:var(--surface2);border-radius:12px;padding:12px 14px;overflow-x:auto;font-size:13px;margin:8px 0 0}
+footer{padding:30px 0 50px;color:var(--muted);font-size:12.5px;border-top:1px solid var(--line)}
+.callout{border-left:0;background:var(--surface2);border-radius:12px;padding:12px 14px;font-size:14px;color:var(--ink2)}
+@media (max-width:860px){
+  .grid4,.facts{grid-template-columns:repeat(2,1fr)}
+  .loop{grid-template-columns:1fr}
+  .two{grid-template-columns:1fr}
+  details.gen summary{grid-template-columns:56px 78px 1fr}
+  details.gen summary .pcol{display:none}
+}
+@media (max-width:480px){ .wrap{padding:0 16px} .kpi .big{font-size:30px} }
+</style>
+</head>
+<body>
+<nav class="top"><div class="wrap">
+  <a class="brand" href="#top">RSI</a>
+  <a class="l" href="#kpi">结果</a><a class="l" href="#how">原理</a><a class="l" href="#evo">进化过程</a>
+  <a class="l" href="#ifeval">官方 IFEval</a><a class="l" href="#diag">能力诊断</a><a class="l" href="#samples">样例对比</a>
+  <a class="l" href="#versions">系统迭代</a><a class="l" href="#repro">复现</a>
+  <span class="sp"></span><button class="theme" id="themeBtn" type="button">切换深浅色</button>
+</div></nav>
+
+<div class="wrap" id="top">
+<header class="hero">
+  <div class="kicker">RECURSIVE SELF-IMPROVEMENT · 试点：指令微调</div>
+  <h1>基于大模型后训练的<br>指令微调自进化系统 RSI</h1>
+  <p class="lead">冠军模型自己出题、自己作答，由程序验证筛出合格样本作为训练数据；元优化器自动提出训练配方，训练、评测后经统计门控决定是否晋升，再反思调整下一代策略——全程无人工标注。</p>
+  <div class="chips" id="chips"></div>
+  <div class="btns">
+    <a class="btn primary" href="#samples">看样例对比</a>
+    <a class="btn" href="https://github.com/notquitezero-ai/rsi-instruct-evolve">GitHub 代码</a>
+    <a class="btn" href="https://github.com/notquitezero-ai/rsi-instruct-evolve/raw/main/deliverables/RSI_%E6%BC%94%E7%A4%BA.pptx">下载演示 PPT</a>
+  </div>
+</header>
+
+<section id="kpi">
+  <h2>核心结果</h2>
+  <p class="sub">项目内测试集（200 道带可验证约束的指令 + 150 道 GSM8K），<b>从不参与任何选择或晋升决策</b>。对比原始基座与系统自主选出的当前冠军。</p>
+  <div class="grid4" id="kpis"></div>
+  <p class="note" id="robustNote"></p>
+  <div class="facts" id="facts"></div>
+</section>
+
+<section id="how">
+  <h2>一代 = 一次完整的自我改进闭环</h2>
+  <p class="sub">深色三步是“自”的部分：数据由模型自己产生、由程序自己验证、晋升由统计自己决定。</p>
+  <div class="loop">
+    <div class="card step"><h3>① 诊断</h3><p>读取冠军在各约束类型上的通过率，找出弱项。</p></div>
+    <div class="card step key"><h3>② 自生成</h3><p>冠军按弱项加权出题，每题采样 k 次作答；数学题自举推理链（STaR）。</p></div>
+    <div class="card step key"><h3>③ 验证筛选</h3><p>18 类约束程序化校验、数学答案与推理链校验、实质内容过滤，只留合格样本。</p></div>
+    <div class="card step"><h3>④ 配方提议</h3><p>元优化器对冠军配方施加改动算子（Thompson 采样学习哪类改动有效；失败定向修复）。</p></div>
+    <div class="card step"><h3>⑤ 训练评测</h3><p>LoRA SFT 训练多个候选，在每代新抽的门控集上与冠军同场评测。</p></div>
+    <div class="card step key"><h3>⑥ 门控反思</h3><p>综合分更优、配对 bootstrap P(更优) ≥ 0.8、数学与退化守护指标不回退才晋升；否则回滚并记录经验。</p></div>
+  </div>
+</section>
+
+<section id="evo">
+  <h2>进化过程</h2>
+  <p class="sub">折线为每代结束时“冠军”在测试集上的表现（未晋升的代沿用上一冠军）。悬停查看数值；展开下方每一代查看候选、门控结论与系统的反思日志。</p>
+  <div class="legend" id="evoLegend"></div>
+  <div class="chart" id="evoChart"></div>
+  <div style="margin-top:22px" id="genList"></div>
+</section>
+
+<section id="ifeval">
+  <h2>第三方验证：官方 IFEval</h2>
+  <p class="sub">项目内测试集的约束模板与训练同源，可能高估泛化，因此在 <b>google/IFEval 全部 541 题</b> 上用官方判分代码（lm-eval 实现）复核。生成设置与项目内评测一致（ChatML、贪心、最长 1280 token），与公开榜单的提示格式不同，绝对值不宜直接横比。</p>
+  <div class="two">
+    <div>
+      <div class="legend" id="ifeLegend"></div>
+      <div class="chart" id="ifeChart"></div>
+    </div>
+    <div class="card" id="ifeSide"></div>
+  </div>
+</section>
+
+<section id="diag">
+  <h2>能力诊断</h2>
+  <p class="sub">各约束类型的通过率（测试集），按提升幅度排序；以及元优化器学到的“哪类改动更可能有效”。</p>
+  <div class="two">
+    <div><div class="legend" id="kindLegend"></div><div class="chart" id="kindChart"></div></div>
+    <div><h3 style="margin:0 0 8px;font-size:15px">改动算子成功率（Beta 后验均值，已尝试）</h3><div class="chart" id="banditChart"></div></div>
+  </div>
+</section>
+
+<section id="samples">
+  <h2>样例对比</h2>
+  <p class="sub">真实模型输出（测试集与 IFEval），任选两个模型并排对比，徽章为程序化校验结果。</p>
+  <div class="tabs"><button id="tabTest" class="on" type="button">项目测试集</button><button id="tabIfe" type="button">官方 IFEval</button></div>
+  <div class="viewer" id="viewer"><p class="small">正在加载样例数据…</p></div>
+</section>
+
+<section id="versions">
+  <h2>系统自身也在迭代</h2>
+  <p class="sub">每个版本都由上一轮运行暴露的证据驱动。门控标准全程未放宽——先看到结果再改晋升条件，等于移动球门。</p>
+  <div class="vgrid" id="vgrid"></div>
+</section>
+
+<section id="repro">
+  <h2>复现与局限</h2>
+  <div class="two">
+    <div>
+      <p class="sub" style="margin-bottom:6px">单张 RTX 4090（24GB），Windows，Python 3.11：</p>
+<pre class="code">python -m venv .venv &amp;&amp; .venv\Scripts\activate
+pip install torch --index-url https://download.pytorch.org/whl/cu128
+pip install transformers peft datasets accelerate gradio python-pptx matplotlib pandas pyyaml "lm-eval[ifeval]"
+python -m rsi.prepare                                   # 下载 Qwen3-1.7B-Base 与数据
+python -m rsi.loop --config configs/pilot.yaml          # 自进化（可断点续跑）
+python -m rsi.ifeval_official                           # 官方 IFEval 复核
+python app/demo.py --run pilot                          # 完整交互 demo（含实时对话）</pre>
+    </div>
+    <div class="callout">
+      <b>局限</b>
+      <ul style="margin:6px 0 0;padding-left:18px">
+        <li>验证器只查格式不查内容质量，会被钻空子；已加实质性过滤与稳健口径，但仍需内容评审。</li>
+        <li>1.7B 模型、单卡、每代 3 个候选，搜索空间受算力限制；部分代之间差异在统计噪声内。</li>
+        <li>本页是静态演示；实时对话与“继续进化”需在本地运行 <code>app/demo.py</code>。</li>
+      </ul>
+    </div>
+  </div>
+</section>
+</div>
+
+<footer><div class="wrap">
+  基座模型 Qwen3-1.7B-Base（Apache-2.0）。数据：yahma/alpaca-cleaned（CC BY 4.0）、openai/gsm8k（MIT）、google/IFEval（Apache-2.0）。本页数据由 <code>scripts/build_site.py</code> 从真实运行结果导出，构建于 <span id="built"></span>。
+</div></footer>
+
+<script>
+const S = {"meta":{"base_model":"Qwen3-1.7B-Base","champion":10,"n_gen":10,"n_prom":3,"n_cand":29,"n_self":14130,"gpu_hours":10.8,"built":"2026-10-21"},"kpi":{"base":{"if":0.265,"instr":0.4517766497461929,"math":0.7266666666666667,"degen":0.23142857142857143,"comp":0.45385714285714285},"champ":{"if":0.46,"instr":0.6345177664974619,"math":0.8066666666666666,"degen":0.09142857142857143,"comp":0.6088571428571429},"robust":{"base":0.215,"champ":0.4}},"gens":[{"gen":0,"promoted":true,"baseline":true,"ops":[],"repair":false,"p_better":null,"diff":null,"ci90":null,"reasons":[],"test":{"if":0.265,"instr":0.4517766497461929,"math":0.7266666666666667,"degen":0.23142857142857143,"comp":0.45385714285714285},"minutes":0.0,"reflection":["原始基座模型（未经指令微调）作为初始冠军。"],"cands":[],"gate":false},{"gen":1,"promoted":false,"baseline":false,"ops":["默认配方"],"repair":false,"p_better":0.9995,"diff":0.08671428571428574,"ci90":[0.04057142857142859,0.13042857142857145],"reasons":["数学能力回退 0.740→0.680"],"test":null,"minutes":31.2,"reflection":["诊断：冠军最弱的约束类型为 段落数(***)(3%)、引号包裹(7%)、全大写(8%)、P.S.附言(26%)；课程强度=1.0，按弱项加权出题。","自生成：指令题 800×4 次采样，验证通过 182 题（样本通过率 9.3%）；数学 300 题通过 257 题（50.5%）。","决策：最佳候选0（默认配方）未通过门控，保留第0代冠军。原因：数学能力回退 0.740→0.680","元优化器经验：当前最可能有效的改动是 学习率↑(0.50)、学习率↓(0.50)、轮数↑(0.50)","自生成通过率低(0.09) → 采样数k↑6, 温度↓0.7","本代未晋升 → 扩大自生成规模 n_if_prompts=1000"],"cands":[{"cid":0,"ops":["默认配方"],"dev":{"if":0.38,"instr":0.583547557840617,"math":0.68,"degen":0.06571428571428571,"comp":0.5254285714285715},"ok":false,"n_train":5039},{"cid":1,"ops":["数学金标↑","种子数据↓"],"dev":{"if":0.345,"instr":0.5681233933161953,"math":0.6933333333333334,"degen":0.07142857142857142,"comp":0.5078571428571428},"ok":false,"n_train":4539}],"gate":false},{"gen":2,"promoted":false,"baseline":false,"ops":["轮数↑"],"repair":false,"p_better":1.0,"diff":0.119,"ci90":[0.07399999999999995,0.16342857142857148],"reasons":["数学能力回退 0.740→0.687"],"test":null,"minutes":51.3,"reflection":["诊断：冠军最弱的约束类型为 段落数(***)(3%)、引号包裹(7%)、全大写(8%)、P.S.附言(26%)；课程强度=1.0，按弱项加权出题。","自生成：指令题 1000×6 次采样，验证通过 277 题（样本通过率 9.0%）；数学 300 题通过 281 题（57.1%）。","反思：上一代最佳候选综合分显著更优，但因数学能力回退被拒 → 本代以其配方为父本，优先尝试修复类算子（学习率↓、轮数↓、种子数据↓、数学金标↑、数学金标↓、自生成数据↑、LoRA秩↓）。","决策：最佳候选2（轮数↑）未通过门控，保留第0代冠军。原因：数学能力回退 0.740→0.687","元优化器经验：当前最可能有效的改动是 学习率↑(0.50)、LoRA秩↑(0.50)、种子数据↑(0.50)","自生成通过率低(0.09) → 采样数k↑8, 温度↓0.6","本代未晋升 → 扩大自生成规模 n_if_prompts=1250"],"cands":[{"cid":0,"ops":["学习率↓"],"dev":{"if":0.41,"instr":0.596401028277635,"math":0.7066666666666667,"degen":0.06857142857142857,"comp":0.5511428571428572},"ok":false,"n_train":5576},{"cid":1,"ops":["LoRA秩↓","轮数↓"],"dev":{"if":0.355,"instr":0.5449871465295629,"math":0.6666666666666666,"degen":0.07142857142857142,"comp":0.5058571428571428},"ok":false,"n_train":5576},{"cid":2,"ops":["轮数↑"],"dev":{"if":0.43,"instr":0.6349614395886889,"math":0.6866666666666666,"degen":0.06285714285714286,"comp":0.5577142857142857},"ok":false,"n_train":5576}],"gate":false},{"gen":3,"promoted":false,"baseline":false,"ops":["数学金标↓"],"repair":false,"p_better":0.9995,"diff":0.0942857142857142,"ci90":[0.04842857142857143,0.139],"reasons":["数学能力回退 0.740→0.633"],"test":null,"minutes":72.9,"reflection":["诊断：冠军最弱的约束类型为 段落数(***)(3%)、引号包裹(7%)、全大写(8%)、P.S.附言(26%)；课程强度=1.0，按弱项加权出题。","自生成：指令题 1250×8 次采样，验证通过 393 题（样本通过率 9.5%）；数学 300 题通过 288 题（60.4%）。","反思：上一代候选 g2c0 综合分显著更优、离通过最近（超限 0.3 点），但因数学能力回退被拒 → 本代以其配方为父本，优先尝试修复类算子（学习率↓、轮数↓、种子数据↓、种子数据减半、数学金标↑、数学金标↓、去掉数学金标、自生成数据↑、LoRA秩↓）。","决策：最佳候选2（数学金标↓）未通过门控，保留第0代冠军。原因：数学能力回退 0.740→0.633","元优化器经验：当前最可能有效的改动是 学习率↑(0.50)、LoRA秩↑(0.50)、种子数据↑(0.50)","本代未晋升 → 扩大自生成规模 n_if_prompts=1562"],"cands":[{"cid":0,"ops":["数学金标↓","学习率↓"],"dev":{"if":0.37,"instr":0.583547557840617,"math":0.6866666666666666,"degen":0.07428571428571429,"comp":0.5205714285714286},"ok":false,"n_train":5886},{"cid":1,"ops":["自生成数据↑","种子数据减半"],"dev":{"if":0.42,"instr":0.6015424164524421,"math":0.6066666666666667,"degen":0.06,"comp":0.528},"ok":false,"n_train":4720},{"cid":2,"ops":["数学金标↓"],"dev":{"if":0.415,"instr":0.6143958868894601,"math":0.6333333333333333,"degen":0.06,"comp":0.5329999999999999},"ok":false,"n_train":5886}],"gate":false},{"gen":4,"promoted":false,"baseline":false,"ops":["数学金标↓"],"repair":true,"p_better":1.0,"diff":0.10057142857142853,"ci90":[0.061285714285714166,0.14228571428571424],"reasons":["数学能力回退 0.740→0.700"],"test":null,"minutes":79.9,"reflection":["自蒸馏种子：冠军回答 2000 条普通指令，过滤后保留 432 条（供“种子自蒸馏”配方替代外部参考答案）。","诊断：冠军最弱的约束类型为 段落数(***)(3%)、引号包裹(7%)、全大写(8%)、P.S.附言(26%)；课程强度=1.0，按弱项加权出题。","自生成：指令题 1200×8 次采样，验证通过 359 题（样本通过率 9.4%）；数学 300 题通过 290 题（59.3%）。","反思：上一代候选 g3c0 综合分显著更优、离通过最近（超限 2.3 点），但因数学能力回退被拒 → 本代以其配方为父本，优先尝试修复类算子（学习率↓、轮数↓、种子数据↓、种子数据减半、数学金标↑、数学金标↓、去掉数学金标、自生成数据↑、LoRA秩↓、种子自蒸馏）。","决策：最佳候选1（修复父本 数学金标↓）未通过门控，保留第0代冠军。原因：数学能力回退 0.740→0.700","元优化器经验：当前最可能有效的改动是 学习率↑(0.50)、自生成数据↓(0.50)、规则增强↑(0.50)"],"cands":[{"cid":0,"ops":["LoRA秩↓","数学金标↑"],"dev":{"if":0.36,"instr":0.5398457583547558,"math":0.6466666666666666,"degen":0.08285714285714285,"comp":0.5017142857142857},"ok":false,"n_train":6799},{"cid":1,"ops":["数学金标↓"],"dev":{"if":0.395,"instr":0.5732647814910026,"math":0.7,"degen":0.07714285714285714,"comp":0.5392857142857143},"ok":false,"n_train":6244},{"cid":2,"ops":["LoRA秩↑","种子数据↑"],"dev":{"if":0.41,"instr":0.6323907455012854,"math":0.64,"degen":0.06571428571428571,"comp":0.5314285714285714},"ok":false,"n_train":8300}],"gate":false},{"gen":5,"promoted":false,"baseline":false,"ops":["规则增强↑"],"repair":false,"p_better":1.0,"diff":0.0922857142857143,"ci90":[0.05042857142857149,0.13500000000000006],"reasons":["数学能力回退 0.740→0.660"],"test":null,"minutes":76.8,"reflection":["自蒸馏种子：冠军回答 2000 条普通指令，过滤后保留 388 条（供“种子自蒸馏”配方替代外部参考答案）。","诊断：冠军最弱的约束类型为 段落数(***)(3%)、引号包裹(7%)、全大写(8%)、P.S.附言(26%)；课程强度=1.0，按弱项加权出题。","自生成：指令题 1200×8 次采样，验证通过 361 题（样本通过率 9.7%）；数学 300 题通过 287 题（60.6%）。","反思：上一代候选 g4c1 综合分显著更优、离通过最近（超限 1.0 点），但因数学能力回退被拒 → 本代以其配方为父本，优先尝试修复类算子（学习率↓、轮数↓、种子数据↓、种子数据减半、数学金标↑、数学金标↓、去掉数学金标、自生成数据↑、LoRA秩↓、种子自蒸馏）。","决策：最佳候选2（规则增强↑）未通过门控，保留第0代冠军。原因：数学能力回退 0.740→0.660","元优化器经验（已尝试算子）：成功率后验最高的是 轮数↑(0.33)、轮数↓(0.33)、LoRA秩↑(0.33)；另有 5 个算子尚未尝试"],"cands":[{"cid":0,"ops":["去掉数学金标"],"dev":{"if":0.375,"instr":0.5578406169665809,"math":0.6866666666666666,"degen":0.09714285714285714,"comp":0.5212857142857142},"ok":false,"n_train":6376},{"cid":1,"ops":["种子自蒸馏"],"dev":{"if":0.375,"instr":0.5629820051413882,"math":0.6266666666666667,"degen":0.09142857142857143,"comp":0.5038571428571428},"ok":false,"n_train":4631},{"cid":2,"ops":["规则增强↑"],"dev":{"if":0.405,"instr":0.6195372750642674,"math":0.66,"degen":0.1,"comp":0.531},"ok":false,"n_train":7736}],"gate":false},{"gen":6,"promoted":true,"baseline":false,"ops":["轮数↓","种子数据↓"],"repair":true,"p_better":1.0,"diff":0.13157142857142856,"ci90":[0.0961428571428572,0.16757142857142854],"reasons":["Δ综合分=+0.1316, P(更优)=1.00, 90%CI=[+0.096,+0.168]"],"test":{"if":0.345,"instr":0.5609137055837563,"math":0.7933333333333333,"degen":0.07428571428571429,"comp":0.5375714285714286},"minutes":61.2,"reflection":["自蒸馏种子：冠军回答 2000 条普通指令，过滤后保留 437 条（供“种子自蒸馏”配方替代外部参考答案）。","诊断：冠军最弱的约束类型为 段落数(***)(3%)、引号包裹(7%)、全大写(8%)、P.S.附言(26%)；课程强度=1.0，按弱项加权出题。","自生成：指令题 800×8 次采样，验证通过 249 题（样本通过率 10.0%）；数学 300 题通过 287 题（56.8%）。","反思：上一代候选 g5c0 综合分显著更优、离通过最近（超限 2.3 点），但因数学能力回退被拒 → 本代以其配方为父本，优先尝试修复类算子（学习率↓、轮数↓、种子数据↓、种子数据减半、数学金标↑、数学金标↓、去掉数学金标、自生成数据↑、LoRA秩↓、种子自蒸馏）。","决策：候选0（修复父本 轮数↓+种子数据↓）通过门控晋升。Δ综合分=+0.1316, P(更优)=1.00, 90%CI=[+0.096,+0.168]","元优化器经验（已尝试算子）：成功率后验最高的是 自生成数据↓(0.67)、规则增强↓(0.67)、轮数↓(0.50)；另有 3 个算子尚未尝试"],"cands":[{"cid":0,"ops":["轮数↓","种子数据↓"],"dev":{"if":0.37,"instr":0.5526992287917738,"math":0.8533333333333334,"degen":0.07714285714285714,"comp":0.5702857142857143},"ok":true,"n_train":5691},{"cid":1,"ops":["种子自蒸馏"],"dev":{"if":0.35,"instr":0.5449871465295629,"math":0.7666666666666667,"degen":0.09428571428571429,"comp":0.5305714285714286},"ok":true,"n_train":4910},{"cid":2,"ops":["自生成数据↓","规则增强↓"],"dev":{"if":0.355,"instr":0.5681233933161953,"math":0.7533333333333333,"degen":0.08857142857142856,"comp":0.5301428571428571},"ok":true,"n_train":6693}],"gate":false},{"gen":7,"promoted":false,"baseline":false,"ops":["学习率↑"],"repair":false,"p_better":0.7185,"diff":0.010714285714285676,"ci90":[-0.017857142857142905,0.03971428571428581],"reasons":["统计置信不足 P(更优)=0.72 < 0.8","数学能力回退 0.853→0.820"],"test":null,"minutes":56.6,"reflection":["自蒸馏种子：冠军回答 2000 条普通指令，过滤后保留 1721 条（供“种子自蒸馏”配方替代外部参考答案）。","诊断：冠军最弱的约束类型为 段落数(***)(0%)、全大写(23%)、禁用逗号(31%)、[占位符](38%)；课程强度=1.0，按弱项加权出题。","自生成：指令题 800×8 次采样，验证通过 348 题（样本通过率 21.0%）；数学 300 题通过 291 题（78.3%）。","决策：最佳候选1（学习率↑）未通过门控，保留第6代冠军。原因：统计置信不足 P(更优)=0.72 < 0.8；数学能力回退 0.853→0.820","元优化器经验（已尝试算子）：成功率后验最高的是 轮数↓(0.50)、种子数据↓(0.50)、自生成数据↓(0.50)；另有 1 个算子尚未尝试"],"cands":[{"cid":0,"ops":["初始化切换"],"dev":{"if":0.38,"instr":0.596401028277635,"math":0.8133333333333334,"degen":0.07428571428571429,"comp":0.5645714285714285},"ok":false,"n_train":6227},{"cid":1,"ops":["学习率↑"],"dev":{"if":0.405,"instr":0.5938303341902313,"math":0.82,"degen":0.08,"comp":0.581},"ok":false,"n_train":6227},{"cid":2,"ops":["规则增强↓","自生成数据↓"],"dev":{"if":0.36,"instr":0.5449871465295629,"math":0.7866666666666666,"degen":0.06285714285714286,"comp":0.5457142857142857},"ok":false,"n_train":5095}],"gate":false},{"gen":8,"promoted":false,"baseline":false,"ops":["种子数据↓"],"repair":false,"p_better":0.6275,"diff":0.004285714285714226,"ci90":[-0.018142857142857127,0.026857142857142913],"reasons":["统计置信不足 P(更优)=0.63 < 0.8","数学能力回退 0.853→0.807"],"test":null,"minutes":61.7,"reflection":["自蒸馏种子：冠军回答 2000 条普通指令，过滤后保留 1724 条（供“种子自蒸馏”配方替代外部参考答案）。","诊断：冠军最弱的约束类型为 段落数(***)(0%)、全大写(23%)、禁用逗号(31%)、[占位符](38%)；课程强度=1.0，按弱项加权出题。","自生成：指令题 800×8 次采样，验证通过 300 题（样本通过率 16.3%）；数学 300 题通过 290 题（78.4%）。","决策：最佳候选2（种子数据↓）未通过门控，保留第6代冠军。原因：统计置信不足 P(更优)=0.63 < 0.8；数学能力回退 0.853→0.807","元优化器经验（已尝试算子）：成功率后验最高的是 轮数↓(0.50)、规则增强↓(0.50)、种子自蒸馏(0.50)；另有 1 个算子尚未尝试"],"cands":[{"cid":0,"ops":["种子数据减半","自生成数据↓"],"dev":{"if":0.4,"instr":0.583547557840617,"math":0.7933333333333333,"degen":0.07428571428571429,"comp":0.5705714285714285},"ok":false,"n_train":4424},{"cid":1,"ops":["初始化切换","种子数据↑"],"dev":{"if":0.38,"instr":0.5732647814910026,"math":0.8133333333333334,"degen":0.05714285714285714,"comp":0.5662857142857143},"ok":false,"n_train":7366},{"cid":2,"ops":["种子数据↓"],"dev":{"if":0.4,"instr":0.5655526992287918,"math":0.8066666666666666,"degen":0.07428571428571429,"comp":0.5745714285714285},"ok":false,"n_train":5699}],"gate":false},{"gen":9,"promoted":true,"baseline":false,"ops":["轮数↑","学习率↑"],"repair":false,"p_better":0.975,"diff":0.04142857142857148,"ci90":[0.006857142857142895,0.07585714285714285],"reasons":["Δ综合分=+0.0414, P(更优)=0.97, 90%CI=[+0.007,+0.076]"],"test":{"if":0.48,"instr":0.6446700507614214,"math":0.8266666666666667,"degen":0.06857142857142857,"comp":0.6291428571428572},"minutes":73.0,"reflection":["自蒸馏种子：冠军回答 2000 条普通指令，过滤后保留 1735 条（供“种子自蒸馏”配方替代外部参考答案）。","诊断：冠军最弱的约束类型为 段落数(***)(0%)、全大写(23%)、禁用逗号(31%)、[占位符](38%)；课程强度=1.0，按弱项加权出题。","自生成：指令题 800×8 次采样，验证通过 302 题（样本通过率 16.3%）；数学 300 题通过 286 题（79.7%）。","门控（新鲜样本，防赢家诅咒）：冠军在本代门控集综合分 0.5447（其 dev 选拔分 0.5703）；候选 c0=0.5671、c1=0.5419、c2=0.5861。","决策：候选2（轮数↑+学习率↑）通过门控晋升。Δ综合分=+0.0414, P(更优)=0.97, 90%CI=[+0.007,+0.076]","元优化器经验（已尝试算子）：成功率后验最高的是 学习率↑(0.50)、轮数↑(0.50)、轮数↓(0.50)；另有 1 个算子尚未尝试"],"cands":[{"cid":0,"ops":["LoRA秩↑"],"dev":{"if":0.415,"instr":0.6041131105398457,"math":0.8,"degen":0.07714285714285714,"comp":0.5812857142857143},"ok":true,"n_train":6824},{"cid":1,"ops":["规则增强↓","种子自蒸馏"],"dev":{"if":0.375,"instr":0.5604113110539846,"math":0.8066666666666666,"degen":0.09428571428571429,"comp":0.5575714285714286},"ok":false,"n_train":6599},{"cid":2,"ops":["轮数↑","学习率↑"],"dev":{"if":0.43,"instr":0.6015424164524421,"math":0.82,"degen":0.07428571428571429,"comp":0.5965714285714285},"ok":true,"n_train":6824}],"gate":true},{"gen":10,"promoted":true,"baseline":false,"ops":["种子数据↑"],"repair":false,"p_better":0.9665,"diff":0.027428571428571247,"ci90":[0.0024285714285714466,0.0525714285714286],"reasons":["Δ综合分=+0.0274, P(更优)=0.97, 90%CI=[+0.002,+0.053]"],"test":{"if":0.46,"instr":0.6345177664974619,"math":0.8066666666666666,"degen":0.09142857142857143,"comp":0.6088571428571429},"minutes":85.4,"reflection":["自蒸馏种子：冠军回答 2000 条普通指令，过滤后保留 1708 条（供“种子自蒸馏”配方替代外部参考答案）。","诊断：冠军最弱的约束类型为 段落数(***)(3%)、禁用逗号(22%)、[占位符](43%)、字数下限(43%)；课程强度=1.0，按弱项加权出题。","自生成：指令题 800×8 次采样，验证通过 374 题（样本通过率 24.3%）；数学 300 题通过 283 题（79.4%）。","门控（新鲜样本，防赢家诅咒）：冠军在本代门控集综合分 0.5876（其 dev 选拔分 0.5966）；候选 c0=0.5967、c1=0.5840、c2=0.6150。","决策：候选2（种子数据↑）通过门控晋升。Δ综合分=+0.0274, P(更优)=0.97, 90%CI=[+0.002,+0.053]","元优化器经验（已尝试算子）：成功率后验最高的是 学习率↑(0.50)、轮数↓(0.50)、轮数↑(0.40)；另有 1 个算子尚未尝试"],"cands":[{"cid":0,"ops":["轮数↑"],"dev":{"if":0.43,"instr":0.6246786632390745,"math":0.7866666666666666,"degen":0.07428571428571429,"comp":0.5865714285714285},"ok":false,"n_train":7349},{"cid":1,"ops":["LoRA秩↑"],"dev":{"if":0.425,"instr":0.6143958868894601,"math":0.8333333333333334,"degen":0.07428571428571429,"comp":0.5975714285714286},"ok":false,"n_train":7349},{"cid":2,"ops":["种子数据↑"],"dev":{"if":0.425,"instr":0.609254498714653,"math":0.8133333333333334,"degen":0.07142857142857142,"comp":0.5918571428571429},"ok":true,"n_train":8349}],"gate":true}],"series":[{"gen":0,"champ":0,"if":0.265,"instr":0.4517766497461929,"math":0.7266666666666667,"degen":0.23142857142857143,"comp":0.45385714285714285},{"gen":1,"champ":0,"if":0.265,"instr":0.4517766497461929,"math":0.7266666666666667,"degen":0.23142857142857143,"comp":0.45385714285714285},{"gen":2,"champ":0,"if":0.265,"instr":0.4517766497461929,"math":0.7266666666666667,"degen":0.23142857142857143,"comp":0.45385714285714285},{"gen":3,"champ":0,"if":0.265,"instr":0.4517766497461929,"math":0.7266666666666667,"degen":0.23142857142857143,"comp":0.45385714285714285},{"gen":4,"champ":0,"if":0.265,"instr":0.4517766497461929,"math":0.7266666666666667,"degen":0.23142857142857143,"comp":0.45385714285714285},{"gen":5,"champ":0,"if":0.265,"instr":0.4517766497461929,"math":0.7266666666666667,"degen":0.23142857142857143,"comp":0.45385714285714285},{"gen":6,"champ":6,"if":0.345,"instr":0.5609137055837563,"math":0.7933333333333333,"degen":0.07428571428571429,"comp":0.5375714285714286},{"gen":7,"champ":6,"if":0.345,"instr":0.5609137055837563,"math":0.7933333333333333,"degen":0.07428571428571429,"comp":0.5375714285714286},{"gen":8,"champ":6,"if":0.345,"instr":0.5609137055837563,"math":0.7933333333333333,"degen":0.07428571428571429,"comp":0.5375714285714286},{"gen":9,"champ":9,"if":0.48,"instr":0.6446700507614214,"math":0.8266666666666667,"degen":0.06857142857142857,"comp":0.6291428571428572},{"gen":10,"champ":10,"if":0.46,"instr":0.6345177664974619,"math":0.8066666666666666,"degen":0.09142857142857143,"comp":0.6088571428571429}],"per_kind":{"kinds":["P.S.附言","引号包裹","全大写","*高亮*","包含关键词","指定开头","SECTION分节","<<标题>>","字数上限","JSON格式","字数下限","精确条目数","[占位符]","段落数(***)","全小写","指定结尾","禁用词","禁用逗号"],"base":[0.2,0.08,0.08,0.2631578947368421,0.5,0.7333333333333333,0.42105263157894735,0.68,0.65,0.5882352941176471,0.5357142857142857,0.35294117647058826,0.4444444444444444,0.0,0.5238095238095238,0.5238095238095238,0.7307692307692307,0.631578947368421],"champ":[0.8666666666666667,0.68,0.56,0.6842105263157895,0.8076923076923077,1.0,0.6842105263157895,0.92,0.85,0.7647058823529411,0.6785714285714286,0.4117647058823529,0.5,0.05263157894736842,0.5714285714285714,0.5238095238095238,0.7307692307692307,0.34210526315789475]},"bandit":[{"op":"学习率↑","mean":0.5,"n":2},{"op":"轮数↓","mean":0.5,"n":2},{"op":"轮数↑","mean":0.4,"n":3},{"op":"LoRA秩↑","mean":0.4,"n":3},{"op":"种子数据↑","mean":0.4,"n":3},{"op":"种子数据↓","mean":0.4,"n":3},{"op":"自生成数据↓","mean":0.4,"n":3},{"op":"规则增强↓","mean":0.4,"n":3},{"op":"种子自蒸馏","mean":0.4,"n":3},{"op":"自生成数据↑","mean":0.3333333333333333,"n":1},{"op":"规则增强↑","mean":0.3333333333333333,"n":1},{"op":"去掉数学金标","mean":0.3333333333333333,"n":1},{"op":"学习率↓","mean":0.25,"n":2},{"op":"LoRA秩↓","mean":0.25,"n":2},{"op":"数学金标↑","mean":0.25,"n":2},{"op":"初始化切换","mean":0.25,"n":2},{"op":"种子数据减半","mean":0.25,"n":2},{"op":"数学金标↓","mean":0.2,"n":3}],"ifeval":{"models":{"base":{"ps":0.24399260628465805,"is":0.37410071942446044,"pl":0.2680221811460259,"il":0.3980815347721823,"finish":0.3142329020332717},"gen6":{"ps":0.3567467652495379,"is":0.48081534772182255,"pl":0.3807763401109057,"il":0.5047961630695443,"finish":0.7412199630314233},"gen9":{"ps":0.4195933456561922,"is":0.5299760191846523,"pl":0.45286506469500926,"il":0.564748201438849,"finish":0.8262476894639557},"gen10":{"ps":0.4232902033271719,"is":0.5407673860911271,"pl":0.4491682070240296,"il":0.5743405275779376,"finish":0.8317929759704251}},"breakdown":{"base":{"inst_strict_seen":0.3829787234042553,"n_inst_seen":564,"inst_strict_unseen":0.35555555555555557,"n_inst_unseen":270,"prompt_strict_unseen_only":0.3076923076923077,"n_prompts_unseen_only":117,"prompt_strict_excl_short":0.1977818853974122,"strict_pass_under_20_words":25},"gen6":{"inst_strict_seen":0.5,"n_inst_seen":564,"inst_strict_unseen":0.44074074074074077,"n_inst_unseen":270,"prompt_strict_unseen_only":0.4017094017094017,"n_prompts_unseen_only":117,"prompt_strict_excl_short":0.2828096118299446,"strict_pass_under_20_words":40},"gen9":{"inst_strict_seen":0.5567375886524822,"n_inst_seen":564,"inst_strict_unseen":0.4740740740740741,"n_inst_unseen":270,"prompt_strict_unseen_only":0.4444444444444444,"n_prompts_unseen_only":117,"prompt_strict_excl_short":0.33271719038817005,"strict_pass_under_20_words":47},"gen10":{"inst_strict_seen":0.5585106382978723,"n_inst_seen":564,"inst_strict_unseen":0.5037037037037037,"n_inst_unseen":270,"prompt_strict_unseen_only":0.49572649572649574,"n_prompts_unseen_only":117,"prompt_strict_excl_short":0.3512014787430684,"strict_pass_under_20_words":39}},"vs_base":{"gen6":{"prompt_level_strict":{"diff":0.11275415896487985,"p_better":1.0,"ci90":[0.07578558225508318,0.1478743068391867]},"prompt_level_loose":{"diff":0.11275415896487985,"p_better":1.0,"ci90":[0.07393715341959335,0.14972273567467653]}},"gen9":{"prompt_level_strict":{"diff":0.1756007393715342,"p_better":1.0,"ci90":[0.13493530499075784,0.21626617375231053]},"prompt_level_loose":{"diff":0.18484288354898337,"p_better":1.0,"ci90":[0.14417744916820702,0.2255083179297597]}},"gen10":{"prompt_level_strict":{"diff":0.17929759704251386,"p_better":1.0,"ci90":[0.13863216266173753,0.2199630314232902]},"prompt_level_loose":{"diff":0.18114602587800369,"p_better":1.0,"ci90":[0.13863216266173753,0.22365988909426987]}}}},"versions":[{"v":"v1","name":"跑通闭环","evidence":"微调后模型永不停止（P(<|im_end|>)≈0）；Windows 显存溢出静默借用内存导致训练慢 20×","fix":"改用基座本就会用的 <|endoftext|> 作结束符；显存上限 90% + 只对回答分块计损"},{"v":"v2","name":"失败定向修复","evidence":"第 1 代两个候选综合分显著更优（P=1.00），却都因数学回退 >3 点被拒","fix":"只在通过门控者中选优；“险胜被拦”的候选作父本，只用针对该失败的修复算子"},{"v":"v3","name":"选对父本","evidence":"最接近通过的候选只差 0.3 点，却没有被选为父本","fix":"父本 = 违规最小者；新增数据源消融算子（去掉数学金标 / 种子减半）"},{"v":"v4","name":"自蒸馏种子","evidence":"3 代 8 个候选全部数学回退，调学习率、轮数、秩都无效","fix":"冠军自答种子指令替代外部答案（SDFT 思路）；新算子强制先试一次；去掉无效算子"},{"v":"v5","name":"推理链校验","evidence":"自蒸馏反而更差（62.7%）——假设被系统自己否定；数学回答中位长度 217→117 token","fix":"根因：STaR 选“最短正确解”奖励了蒙对（11% 样本只有一句答案）；改为校验推理链 + 取中位长度，并回溯清洗数据池"},{"v":"v6","name":"防钻空子","evidence":"冠军只答“P.S.”也能同时通过 3 项格式校验","fix":"不足 20 词的回答不入池并回溯清洗；新增“稳健口径”指标（只算有实质内容的通过）"},{"v":"v7","name":"防赢家诅咒","evidence":"冠军是按 dev 选出来的：dev 数学 85.3%，换一批新题只有 76.0%","fix":"每代新抽“门控集”，冠军与候选同场重测后再决定晋升；dev 只用于画曲线和诊断"}]};
+const $ = (s, r = document) => r.querySelector(s);
+const pct = (x, d = 1) => x == null ? "—" : (x * 100).toFixed(d) + "%";
+const css = v => getComputedStyle(document.documentElement).getPropertyValue(v).trim();
+function el(tag, attrs = {}, ...kids) {
+  const e = document.createElement(tag);
+  for (const [k, v] of Object.entries(attrs)) {
+    if (k === "class") e.className = v; else if (k === "text") e.textContent = v; else e.setAttribute(k, v);
+  }
+  for (const k of kids.flat()) if (k != null) e.append(k.nodeType ? k : document.createTextNode(k));
+  return e;
+}
+const NS = "http://www.w3.org/2000/svg";
+function sv(tag, attrs = {}) { const e = document.createElementNS(NS, tag); for (const [k, v] of Object.entries(attrs)) e.setAttribute(k, v); return e; }
+
+/* theme toggle (viewer convenience only) */
+(function () {
+  let t = null; try { t = localStorage.getItem("rsi-theme"); } catch (e) {}
+  if (t) document.documentElement.setAttribute("data-theme", t);
+  $("#themeBtn").onclick = () => {
+    const cur = document.documentElement.getAttribute("data-theme") ||
+      (matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light");
+    const nx = cur === "dark" ? "light" : "dark";
+    document.documentElement.setAttribute("data-theme", nx);
+    try { localStorage.setItem("rsi-theme", nx); } catch (e) {}
+    renderCharts();
+  };
+})();
+
+/* ---------- tooltip helper ---------- */
+function tipFor(host) {
+  const t = el("div", { class: "tip" }); host.append(t);
+  return {
+    show(x, y, title, rows) {
+      t.replaceChildren(el("div", { class: "t", text: title }), ...rows.map(([k, v, c]) => {
+        const r = el("div", { class: "r" }); const s = el("span");
+        if (c) s.append(el("i", { style: `display:inline-block;width:9px;height:9px;border-radius:2px;margin-right:5px;background:${c}` }));
+        s.append(k); r.append(s, el("b", { text: v })); return r;
+      }));
+      const w = host.clientWidth; t.style.opacity = 1;
+      t.style.left = Math.min(Math.max(0, x + 14), w - t.offsetWidth - 4) + "px"; t.style.top = Math.max(0, y - 10) + "px";
+    },
+    hide() { t.style.opacity = 0; }
+  };
+}
+
+/* ---------- line chart (champion series) ---------- */
+function lineChart(host, xs, series) {
+  host.replaceChildren();
+  const W = 1000, H = 360, L = 44, R = 18, T = 14, B = 34;
+  const svg = sv("svg", { viewBox: `0 0 ${W} ${H}`, role: "img", "aria-label": "各代冠军测试集指标" });
+  const x = i => L + (W - L - R) * i / (xs.length - 1), y = v => T + (H - T - B) * (1 - v);
+  for (let g = 0; g <= 1.0001; g += 0.2) {
+    svg.append(sv("line", { x1: L, x2: W - R, y1: y(g), y2: y(g), class: "grid" }));
+    const t = sv("text", { x: L - 8, y: y(g) + 4, "text-anchor": "end" }); t.textContent = Math.round(g * 100) + "%"; svg.append(t);
+  }
+  xs.forEach((lab, i) => { const t = sv("text", { x: x(i), y: H - 10, "text-anchor": "middle" }); t.textContent = lab; svg.append(t); });
+  const surf = css("--surface");
+  for (const s of series) {
+    svg.append(sv("polyline", { points: s.values.map((v, i) => `${x(i)},${y(v)}`).join(" "), fill: "none", stroke: s.color, "stroke-width": 2.2, "stroke-linejoin": "round" }));
+    s.values.forEach((v, i) => svg.append(sv("circle", { cx: x(i), cy: y(v), r: s.mark[i] ? 5.5 : 3.2, fill: s.mark[i] ? s.color : surf, stroke: s.color, "stroke-width": 2 })));
+  }
+  const cross = sv("line", { y1: T, y2: H - B, stroke: css("--muted"), "stroke-dasharray": "3 3", opacity: 0 });
+  svg.append(cross); host.append(svg);
+  const tip = tipFor(host);
+  svg.addEventListener("mousemove", ev => {
+    const r = svg.getBoundingClientRect(), px = (ev.clientX - r.left) * W / r.width;
+    const i = Math.max(0, Math.min(xs.length - 1, Math.round((px - L) / ((W - L - R) / (xs.length - 1)))));
+    cross.setAttribute("x1", x(i)); cross.setAttribute("x2", x(i)); cross.setAttribute("opacity", 1);
+    tip.show(x(i) * r.width / W, (ev.clientY - r.top), `${xs[i]}（冠军：第${S.series[i].champ}代）`, series.map(s => [s.name, pct(s.values[i]), s.color]));
+  });
+  svg.addEventListener("mouseleave", () => { cross.setAttribute("opacity", 0); tip.hide(); });
+}
+
+/* ---------- grouped vertical bars ---------- */
+function groupedBars(host, cats, series, yMax) {
+  host.replaceChildren();
+  const W = 640, H = 340, L = 40, R = 8, T = 18, B = 40;
+  const svg = sv("svg", { viewBox: `0 0 ${W} ${H}`, role: "img" });
+  const y = v => T + (H - T - B) * (1 - v / yMax);
+  for (let g = 0; g <= yMax + 1e-9; g += 0.1) {
+    svg.append(sv("line", { x1: L, x2: W - R, y1: y(g), y2: y(g), class: "grid" }));
+    const t = sv("text", { x: L - 6, y: y(g) + 4, "text-anchor": "end" }); t.textContent = Math.round(g * 100) + "%"; svg.append(t);
+  }
+  const gw = (W - L - R) / cats.length, bw = Math.min(30, (gw - 18) / series.length - 2);
+  const tip = tipFor(host);
+  cats.forEach((c, ci) => {
+    const x0 = L + gw * ci + (gw - (bw + 2) * series.length) / 2;
+    series.forEach((s, si) => {
+      const v = s.values[ci], bx = x0 + si * (bw + 2), by = y(v);
+      const rect = sv("rect", { x: bx, y: by, width: bw, height: Math.max(0, y(0) - by), rx: 3, fill: s.color });
+      svg.append(rect);
+      const lab = sv("text", { x: bx + bw / 2, y: by - 4, "text-anchor": "middle", style: "font-size:10px" }); lab.textContent = Math.round(v * 100); svg.append(lab);
+      const hit = sv("rect", { x: bx - 1, y: T, width: bw + 2, height: H - T - B, fill: "transparent" });
+      hit.addEventListener("mousemove", ev => { const r = svg.getBoundingClientRect(); tip.show((bx + bw) * r.width / W, ev.clientY - r.top, c, series.map(z => [z.name, pct(z.values[ci]), z.color])); });
+      hit.addEventListener("mouseleave", () => tip.hide());
+      svg.append(hit);
+    });
+    const t = sv("text", { x: L + gw * ci + gw / 2, y: H - 16, "text-anchor": "middle", style: "font-size:12px" }); t.textContent = c; svg.append(t);
+  });
+  host.append(svg);
+}
+
+/* ---------- horizontal bars (two series) ---------- */
+function hbars(host, cats, series, opts = {}) {
+  host.replaceChildren();
+  const rowH = opts.rowH || 26, L = opts.L || 112, W = opts.W || 560, R = 44, T = 4;
+  const H = T + cats.length * rowH + 22, xMax = opts.xMax || 1;
+  const svg = sv("svg", { viewBox: `0 0 ${W} ${H}`, role: "img" });
+  const x = v => L + (W - L - R) * v / xMax;
+  for (let g = 0; g <= xMax + 1e-9; g += xMax / 4) {
+    svg.append(sv("line", { x1: x(g), x2: x(g), y1: T, y2: H - 20, class: "grid" }));
+    const t = sv("text", { x: x(g), y: H - 6, "text-anchor": "middle" }); t.textContent = Math.round(g * 100) + "%"; svg.append(t);
+  }
+  const tip = tipFor(host);
+  const bh = (rowH - 8) / series.length;
+  cats.forEach((c, i) => {
+    const y0 = T + i * rowH + 4;
+    const t = sv("text", { x: L - 8, y: y0 + (rowH - 8) / 2 + 4, "text-anchor": "end", style: "font-size:11.5px" }); t.textContent = c; svg.append(t);
+    series.forEach((s, si) => svg.append(sv("rect", { x: L, y: y0 + si * bh, width: Math.max(1, x(s.values[i]) - L), height: bh - 1, rx: 2, fill: s.color })));
+    if (opts.label) { const lt = sv("text", { x: x(series[series.length - 1].values[i]) + 4, y: y0 + (rowH - 8) / 2 + 4, style: "font-size:10.5px" }); lt.textContent = opts.label(i); svg.append(lt); }
+    const hit = sv("rect", { x: 0, y: y0 - 2, width: W, height: rowH, fill: "transparent" });
+    hit.addEventListener("mousemove", ev => { const r = svg.getBoundingClientRect(); tip.show(ev.clientX - r.left, ev.clientY - r.top, c, series.map(z => [z.name, pct(z.values[i]), z.color]).concat(opts.extra ? [opts.extra(i)] : [])); });
+    hit.addEventListener("mouseleave", () => tip.hide());
+    svg.append(hit);
+  });
+  host.append(svg);
+}
+
+/* ---------- static sections ---------- */
+function renderStatic() {
+  const m = S.meta, k = S.kpi;
+  $("#built").textContent = m.built;
+  $("#chips").append(...[`基座 ${m.base_model}`, "单卡 RTX 4090", `已自主进化 ${m.n_gen} 代`, `当前冠军：第 ${m.champion} 代`].map(t => el("span", { class: "chip", text: t })));
+  const tiles = [["if", "指令遵循 · 严格准确率", false], ["instr", "指令遵循 · 约束级准确率", false], ["math", "GSM8K 数学推理（守护指标）", false], ["degen", "输出退化率（越低越好）", true]];
+  $("#kpis").append(...tiles.map(([key, lab, lower]) => {
+    const d = (k.champ[key] - k.base[key]) * 100, good = lower ? d < 0 : d > 0;
+    return el("div", { class: "card kpi" }, el("div", { class: "lab", text: lab }), el("div", { class: "big", text: pct(k.champ[key]) }),
+      el("div", { class: "base" }, `基座 ${pct(k.base[key])}　`, el("span", { class: "delta " + (good ? "good" : "bad"), text: `${d >= 0 ? "+" : ""}${d.toFixed(1)} 点` })));
+  }));
+  $("#robustNote").textContent = `稳健口径（剔除不足 20 词、可能“钻空子”的通过）：严格准确率 ${pct(k.robust.base)} → ${pct(k.robust.champ)}。` +
+    (S.ifeval ? `　官方 IFEval 提示级严格：${pct(S.ifeval.models.base.ps)} → ${pct(S.ifeval.models["gen" + m.champion]?.ps)}。` : "");
+  $("#facts").append(...[[m.n_gen + " 代", "全自动进化，" + m.n_prom + " 次晋升"], [m.n_cand + " 个", "训练并评测的候选模型"], [m.n_self.toLocaleString() + " 条", "自生成且经程序验证的样本"], [m.gpu_hours + " h", "单卡 GPU 时间"]]
+    .map(([b, s]) => el("div", { class: "card fact" }, el("b", { text: b }), el("span", { text: s }))));
+
+  const list = $("#genList");
+  list.append(el("div", { class: "small", style: "display:grid;grid-template-columns:70px 92px 1fr 90px;gap:10px;padding:0 0 6px" }, el("span", { text: "代" }), el("span", { text: "决策" }), el("span", { text: "最佳候选的改动" }), el("span", { class: "pcol", text: "P(更优)" })));
+  for (const g of S.gens) {
+    const tag = g.baseline ? el("span", { class: "tag base", text: "基线" }) : el("span", { class: "tag " + (g.promoted ? "up" : "keep"), text: g.promoted ? "晋升" : "保留旧冠军" });
+    const sum = el("summary", {}, el("b", { text: `第${g.gen}代` }), tag,
+      el("span", { class: "ops", text: g.baseline ? "原始基座（未微调）" : (g.repair ? "修复父本 · " : "") + g.ops.join(" + ") }),
+      el("span", { class: "pcol small", text: g.p_better == null ? "" : g.p_better.toFixed(2) }));
+    const body = el("div", { class: "body" });
+    if (g.test) body.append(el("div", {}, el("b", { text: "测试集：" }), `严格 ${pct(g.test.if)} · 约束级 ${pct(g.test.instr)} · GSM8K ${pct(g.test.math)} · 退化 ${pct(g.test.degen)}`));
+    if (g.ci90) body.append(el("div", {}, el("b", { text: "门控：" }), `Δ综合分 ${(g.diff * 100).toFixed(1)} 点，90%CI [${(g.ci90[0] * 100).toFixed(1)}, ${(g.ci90[1] * 100).toFixed(1)}]` + (g.gate ? "（本代新抽门控集）" : "（dev）") + (g.reasons.length && !g.promoted ? " — " + g.reasons.join("；") : "")));
+    if (g.cands.length) {
+      const tb = el("table", {}, el("tr", {}, ...["候选", "改动", "训练样本", "dev 指令", "dev 数学", "通过门控"].map((h, i) => el("th", { class: i >= 2 ? "num" : "", text: h }))));
+      for (const c of g.cands) tb.append(el("tr", {}, el("td", { text: "c" + c.cid }), el("td", { text: c.ops.join(" + ") }), el("td", { class: "num", text: c.n_train ?? "" }),
+        el("td", { class: "num", text: pct(c.dev.if) }), el("td", { class: "num", text: pct(c.dev.math) }), el("td", { class: "num", text: c.ok ? "✓" : "—" })));
+      body.append(el("div", { style: "overflow-x:auto;margin:8px 0" }, tb));
+    }
+    if (g.reflection.length) body.append(el("div", {}, el("b", { text: "反思日志：" }), el("ul", {}, ...g.reflection.map(t => el("li", { text: t })))));
+    if (g.minutes) body.append(el("div", { class: "small", text: `本代耗时 ${g.minutes} 分钟` }));
+    list.append(el("details", { class: "gen" }, sum, body));
+  }
+
+  if (S.ifeval) {
+    const champ = "gen" + m.champion, bd = S.ifeval.breakdown, vb = S.ifeval.vs_base[champ]?.prompt_level_strict;
+    const side = $("#ifeSide");
+    side.append(el("div", { class: "small", text: "提示级·严格准确率（官方主指标）" }),
+      el("div", { style: "font-size:30px;font-weight:700;color:var(--brand)", text: `${pct(S.ifeval.models.base.ps)} → ${pct(S.ifeval.models[champ]?.ps)}` }));
+    if (vb) side.append(el("div", { class: "small", text: `+${(vb.diff * 100).toFixed(1)} 点，配对 bootstrap 90%CI [${(vb.ci90[0] * 100).toFixed(1)}, ${(vb.ci90[1] * 100).toFixed(1)}]` }));
+    const rows = [["训练中从未见过的指令类型（指令级）", "inst_strict_unseen"], ["只含未见过类型的题（提示级）", "prompt_strict_unseen_only"], ["剔除不足 20 词的“通过”（提示级）", "prompt_strict_excl_short"]];
+    const tb = el("table", { style: "margin-top:12px" }, el("tr", {}, el("th", { text: "稳健性拆解" }), el("th", { class: "num", text: "基座" }), el("th", { class: "num", text: "冠军" })));
+    for (const [lab, key] of rows) tb.append(el("tr", {}, el("td", { text: lab }), el("td", { class: "num", text: pct(bd.base?.[key]) }), el("td", { class: "num", text: pct(bd[champ]?.[key]) })));
+    tb.append(el("tr", {}, el("td", { text: "输出了结束符（完成率）" }), el("td", { class: "num", text: pct(S.ifeval.models.base.finish, 0) }), el("td", { class: "num", text: pct(S.ifeval.models[champ]?.finish, 0) })));
+    side.append(tb, el("p", { class: "small", text: "no_comma、forbidden_words 分项上基座看似更高，是测量假象：基座大量“通过”来自复读失控的输出（复读文本天然不含逗号/禁用词）。以第 6 代逐条核对为例，剔除复读后 no_comma 12→18、forbidden_words 8→13。" }));
+  } else { $("#ifeval").style.display = "none"; }
+
+  $("#vgrid").append(...S.versions.map((v, i) => el("div", { class: "card ver" + (i === S.versions.length - 1 ? " last" : "") },
+    el("div", { class: "v", text: v.v }), el("h3", { text: v.name }), el("p", { class: "ev", text: "证据：" + v.evidence }), el("p", { class: "fx", text: v.fix }))));
+}
+
+function legend(host, items) { host.replaceChildren(...items.map(([n, c]) => el("span", {}, el("i", { style: `background:${c}` }), n))); }
+
+function renderCharts() {
+  const xs = S.series.map(s => `第${s.gen}代`);
+  const mark = S.series.map((s, i) => i === 0 || S.series[i - 1].champ !== s.champ);
+  const ser = [["指令严格准确率", "if", "--s1"], ["约束级准确率", "instr", "--s3"], ["GSM8K", "math", "--s2"]].map(([n, k, c]) => ({ name: n, color: css(c), values: S.series.map(s => s[k]), mark }));
+  legend($("#evoLegend"), ser.map(s => [s.name, s.color]).concat([["实心点 = 该代产生新冠军", css("--muted")]]));
+  lineChart($("#evoChart"), xs, ser);
+
+  if (S.ifeval) {
+    const labs = Object.keys(S.ifeval.models), ramp = ["--m0", "--m1", "--m2", "--m3", "--m4"];
+    const cols = labs.map((l, i) => css(i === 0 ? "--m0" : ramp[Math.min(4, 5 - labs.length + i)]));
+    const ss = labs.map((l, i) => ({ name: l === "base" ? "原始基座" : `第${l.slice(3)}代`, color: cols[i],
+      values: [S.ifeval.models[l].ps, S.ifeval.models[l].is, S.ifeval.breakdown[l]?.inst_strict_unseen ?? 0] }));
+    legend($("#ifeLegend"), ss.map(s => [s.name, s.color]));
+    groupedBars($("#ifeChart"), ["提示级·严格（主指标）", "指令级·严格", "训练未见过的类型"], ss, 0.7);
+  }
+  const pk = S.per_kind;
+  const ks = [{ name: "原始基座", color: css("--gray"), values: pk.base }, { name: `冠军（第${S.meta.champion}代）`, color: css("--brand"), values: pk.champ }];
+  legend($("#kindLegend"), ks.map(s => [s.name, s.color]));
+  hbars($("#kindChart"), pk.kinds, ks, { rowH: 24, label: i => { const d = Math.round((pk.champ[i] - pk.base[i]) * 100); return (d >= 0 ? "+" : "") + d; } });
+  if (S.bandit.length) hbars($("#banditChart"), S.bandit.map(b => b.op), [{ name: "成功率后验", color: css("--s1"), values: S.bandit.map(b => b.mean) }],
+    { rowH: 22, L: 96, W: 380, extra: i => ["尝试次数", String(S.bandit[i].n)], label: i => pct(S.bandit[i].mean, 0) });
+}
+
+/* ---------- sample viewers (lazy) ---------- */
+const cache = {};
+async function load(name) {
+  if (cache[name]) return cache[name];
+  const r = await fetch("data/" + name); if (!r.ok) throw new Error(r.status);
+  return (cache[name] = await r.json());
+}
+function viewer(kind) {
+  const host = $("#viewer"); host.replaceChildren(el("p", { class: "small", text: "正在加载样例数据…" }));
+  load(kind === "test" ? "samples_test.json" : "ifeval_samples.json").then(D => buildViewer(host, D, kind)).catch(() =>
+    host.replaceChildren(el("p", { class: "small", text: "样例数据需通过网页链接访问（本地直接双击打开时浏览器会拦截读取）。可在仓库目录运行 python -m http.server 后访问 docs/。" })));
+}
+function buildViewer(host, D, kind) {
+  const keys = D.models.map(m => m.key), name = Object.fromEntries(D.models.map(m => [m.key, m.name]));
+  const selA = el("select"), selB = el("select"), filt = el("select"), idx = el("select");
+  for (const k of keys) { selA.append(el("option", { value: k, text: name[k] })); selB.append(el("option", { value: k, text: name[k] })); }
+  selA.value = keys[0]; selB.value = keys[keys.length - 1];
+  const filters = kind === "test"
+    ? [["all", "全部"], ["win", "右侧通过、左侧失败"], ["lose", "左侧通过、右侧失败"], ["if", "仅指令题"], ["math", "仅数学题"]]
+    : [["all", "全部"], ["win", "右侧通过、左侧失败"], ["lose", "左侧通过、右侧失败"]];
+  for (const [v, t] of filters) filt.append(el("option", { value: v, text: t }));
+  const pass = (k, i) => kind === "test" ? (D.items[i].type === "if" ? D.resp[k][i].s : D.resp[k][i].ok) : D.resp[k][i].s;
+  const prev = el("button", { class: "nav", type: "button", text: "上一个" }), next = el("button", { class: "nav", type: "button", text: "下一个" }), rnd = el("button", { class: "nav", type: "button", text: "随机" });
+  const out = el("div");
+  let pool = [];
+  function refilter() {
+    const a = selA.value, b = selB.value, f = filt.value;
+    pool = D.items.map((_, i) => i).filter(i => f === "all" || (f === "win" && pass(b, i) && !pass(a, i)) || (f === "lose" && pass(a, i) && !pass(b, i)) ||
+      (f === "if" && D.items[i].type === "if") || (f === "math" && D.items[i].type === "math"));
+    idx.replaceChildren(...pool.map((i, n) => el("option", { value: i, text: `${n + 1} / ${pool.length}` })));
+    show();
+  }
+  function badges(k, i) {
+    const it = D.items[i], r = D.resp[k][i], wrap = el("div", { class: "badges" });
+    if (kind === "test") {
+      if (it.type === "if") it.kinds.forEach((kk, j) => wrap.append(el("span", { class: "b " + (r.c[j] ? "ok" : "no"), text: (r.c[j] ? "✓ " : "✗ ") + kk })));
+      else wrap.append(el("span", { class: "b " + (r.ok ? "ok" : "no"), text: `${r.ok ? "✓" : "✗"} 预测 ${r.p ?? "无"} / 标准 ${it.gold}` }));
+    } else it.ids.forEach((id, j) => wrap.append(el("span", { class: "b " + (r.i[j] ? "ok" : "no"), text: (r.i[j] ? "✓ " : "✗ ") + id.split(":")[1] })));
+    if (r.f === false) wrap.append(el("span", { class: "b warn", text: "未输出结束符" }));
+    return wrap;
+  }
+  function show() {
+    if (!pool.length) { out.replaceChildren(el("p", { class: "small", text: "没有符合筛选条件的样例。" })); return; }
+    const i = +idx.value, it = D.items[i];
+    const col = k => el("div", {}, el("div", { style: "font-weight:700;margin-bottom:6px", text: name[k] }), badges(k, i), el("div", { class: "resp", text: D.resp[k][i].t || "（空）" }));
+    out.replaceChildren(el("div", { class: "prompt", text: it.prompt }), el("div", { class: "two", style: "grid-template-columns:1fr 1fr" }, col(selA.value), col(selB.value)));
+  }
+  const step = d => { const n = pool.indexOf(+idx.value); idx.value = pool[(n + d + pool.length) % pool.length]; show(); };
+  prev.onclick = () => step(-1); next.onclick = () => step(1); rnd.onclick = () => { idx.value = pool[Math.floor(Math.random() * pool.length)]; show(); };
+  selA.onchange = selB.onchange = filt.onchange = refilter; idx.onchange = show;
+  host.replaceChildren(el("div", { class: "bar" }, el("label", {}, "左侧模型", selA), el("label", {}, "右侧模型", selB), el("label", {}, "筛选", filt), el("label", {}, "样例", idx), prev, next, rnd), out);
+  filt.value = "win"; refilter();
+}
+$("#tabTest").onclick = () => { $("#tabTest").classList.add("on"); $("#tabIfe").classList.remove("on"); viewer("test"); };
+$("#tabIfe").onclick = () => { $("#tabIfe").classList.add("on"); $("#tabTest").classList.remove("on"); viewer("ifeval"); };
+
+renderStatic(); renderCharts(); viewer("test");
+matchMedia("(prefers-color-scheme: dark)").addEventListener("change", renderCharts);
+</script>
+</body>
+</html>
