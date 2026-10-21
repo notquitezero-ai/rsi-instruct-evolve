@@ -1,0 +1,12 @@
+﻿# Tiny end-to-end check of every stage (minutes, not hours). Not a meaningful experiment.
+run_name: smoke
+base_model: models/Qwen3-1.7B-Base
+seed: 7
+data_seed: 1234
+generations: 2
+candidates_per_gen: 2
+synth_from_base: true
+eval_limit: 24
+gate: {p_better: 0.8, math_tol: 0.03, degen_tol: 0.03}
+recipe: {n_seed: 300, n_math_seed: 100, n_rule: 100, epochs: 1}
+synth: {n_if_prompts: 40, n_math: 20, k: 2, temperature: 0.8, curriculum: 1.0}

@@ -1,0 +1,20 @@
+﻿# RSI pilot: instruction tuning self-evolution on Qwen3-1.7B-Base (single RTX 4090)
+run_name: pilot
+base_model: models/Qwen3-1.7B-Base
+seed: 7
+data_seed: 1234
+generations: 6            # generations to add per invocation (resumable)
+candidates_per_gen: 3     # recipes trained & evaluated per generation
+synth_from_base: true     # Qwen3-Base already half-follows ChatML: it bootstraps its own verified data from gen1
+
+gate:                     # promotion requires ALL of:
+  p_better: 0.8           #   paired-bootstrap P(composite_new > composite_champion) >= 0.8
+  math_tol: 0.03          #   math accuracy may not drop more than 3 points
+  degen_tol: 0.03         #   degeneration rate may not rise more than 3 points
+
+synth:                    # initial data-engine settings (adapted automatically afterwards)
+  n_if_prompts: 800
+  n_math: 300
+  k: 4
+  temperature: 0.8
+  curriculum: 1.0
